@@ -12,6 +12,7 @@ export class CubeScene {
   private interaction: CubeInteraction;
   private animFrameId: number = 0;
   private container: HTMLElement;
+  private ro: ResizeObserver | null = null;
 
   // Force mode
   private forceState: CubeStateData | null = null;
@@ -19,6 +20,7 @@ export class CubeScene {
   private forceModeActive = false;   // actually applying force (after corner trigger)
   private prevVisibility: Map<FaceKey, boolean> = new Map();
   onForceActiveChange?: (active: boolean) => void;
+  onForceArmedChange?: (armed: boolean) => void;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -72,6 +74,8 @@ export class CubeScene {
 
     // Resize handler
     window.addEventListener('resize', this.onResize);
+    this.ro = new ResizeObserver(() => this.onResize());
+    this.ro.observe(this.container);
 
     // Start render loop
     this.startRenderLoop();
@@ -136,6 +140,7 @@ export class CubeScene {
     this.forceModeArmed = false;
     this.forceModeActive = false;
     this.onForceActiveChange?.(false);
+    this.onForceArmedChange?.(false);
     this.resetVisibilityTracking();
   }
 
@@ -186,6 +191,7 @@ export class CubeScene {
   /** Enable force mode (arm it) - called from checkbox */
   armForceMode() {
     this.forceModeArmed = true;
+    this.onForceArmedChange?.(true);
   }
 
   /** Disable force mode completely */
@@ -193,6 +199,7 @@ export class CubeScene {
     this.forceModeArmed = false;
     this.forceModeActive = false;
     this.onForceActiveChange?.(false);
+    this.onForceArmedChange?.(false);
   }
 
   /** Toggle armed state (for checkbox) */
@@ -306,6 +313,7 @@ export class CubeScene {
   destroy() {
     cancelAnimationFrame(this.animFrameId);
     this.interaction.destroy();
+    this.ro?.disconnect();
     window.removeEventListener('resize', this.onResize);
     this.renderer.dispose();
     if (this.renderer.domElement.parentNode) {

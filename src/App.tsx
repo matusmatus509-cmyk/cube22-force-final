@@ -109,8 +109,8 @@ const handleToggleForce = () => {
           {status && <div className="force-status">{status}</div>}
 
           <div className="force-hint">
-            <p><strong>Trigger:</strong> Hold 300ms in screen corner</p>
-            <p><strong>How it works:</strong> Hidden faces → force state when rotated away</p>
+            <p><strong>How it works:</strong> Tap FORCE button in toolbar, then rotate hidden faces away</p>
+            <p>Hidden faces → force state when rotated out of view</p>
           </div>
         </div>
       </div>
@@ -129,6 +129,7 @@ export default function App() {
   const [showSolvedBanner, setShowSolvedBanner] = useState(false);
   const [showForcePanel, setShowForcePanel] = useState(false);
   const [forceActive, setForceActive] = useState(false);
+  const [forceArmed, setForceArmed] = useState(false);
   const scrambleRef = useRef(false);
   const solveRef = useRef(false);
   const titlePressTimer = useRef<number | null>(null);
@@ -146,6 +147,7 @@ export default function App() {
       }
     });
     scene.onForceActiveChange = setForceActive;
+    scene.onForceArmedChange = setForceArmed;
     return () => { scene.destroy(); cubeSceneRef.current = null; };
   }, []);
 
@@ -222,6 +224,15 @@ export default function App() {
 
   const busy = scrambling || solving;
 
+  const handleForceTrigger = useCallback(() => {
+    if (!cubeSceneRef.current) return;
+    if (cubeSceneRef.current.isForceModeActive()) {
+      cubeSceneRef.current.deactivateForceMode();
+    } else {
+      cubeSceneRef.current.activateForceMode();
+    }
+  }, []);
+
   // Title long press handlers
   const onTitleMouseDown = () => {
     titlePressTimer.current = window.setTimeout(() => {
@@ -294,6 +305,12 @@ export default function App() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
           <span>Reset</span>
         </button>
+        {forceArmed && (
+          <button className={`tool ${forceActive ? 'tool-force active' : ''}`} onClick={handleForceTrigger}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+            <span>{forceActive ? 'FORCE ON' : 'FORCE'}</span>
+          </button>
+        )}
       </nav>
 
       {/* ── Moves drawer ── */}
