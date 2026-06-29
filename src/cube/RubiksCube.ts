@@ -510,26 +510,26 @@ export class RubiksCube {
         }
       });
 
-      // Sort stickers by world position to match forceColors array order
-      // forceColors is in standard face order: rows back-to-front, cols left-to-right
+      // Sort stickers to match CubeState face array indexing (0-8, row-major top-left to bottom-right)
+      // See getStickerColor for the index mapping
       switch (face) {
-        case 'U': // sort by Z (back to front), then X (left to right)
+        case 'U': // row = 1-z, col = x+1  → back-to-front (z desc), left-to-right (x asc)
+          stickers.sort((a, b) => b.worldPos.z - a.worldPos.z || a.worldPos.x - b.worldPos.x);
+          break;
+        case 'D': // row = z+1, col = x+1  → front-to-back (z asc), left-to-right (x asc)
           stickers.sort((a, b) => a.worldPos.z - b.worldPos.z || a.worldPos.x - b.worldPos.x);
           break;
-        case 'D': // sort by Z (back to front), then X (left to right) - looking up
-          stickers.sort((a, b) => a.worldPos.z - b.worldPos.z || a.worldPos.x - b.worldPos.x);
-          break;
-        case 'F': // sort by Y (top to bottom), then X (left to right)
+        case 'F': // row = 1-y, col = x+1  → top-to-bottom (y desc), left-to-right (x asc)
           stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || a.worldPos.x - b.worldPos.x);
           break;
-        case 'B': // sort by Y (top to bottom), then X (right to left - mirrored)
+        case 'B': // row = 1-y, col = 1-x  → top-to-bottom (y desc), right-to-left (x desc)
           stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || b.worldPos.x - a.worldPos.x);
           break;
-        case 'L': // sort by Y (top to bottom), then Z (front to back)
-          stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || a.worldPos.z - b.worldPos.z);
-          break;
-        case 'R': // sort by Y (top to bottom), then Z (back to front)
+        case 'L': // row = 1-y, col = z+1  → top-to-bottom (y desc), back-to-front (z desc)
           stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || b.worldPos.z - a.worldPos.z);
+          break;
+        case 'R': // row = 1-y, col = 1-z  → top-to-bottom (y desc), front-to-back (z asc)
+          stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || a.worldPos.z - b.worldPos.z);
           break;
       }
 

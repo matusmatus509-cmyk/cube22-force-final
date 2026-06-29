@@ -267,6 +267,10 @@ export class CubeScene {
   }
 
   private computeFaceVisibility(): Record<FaceKey, boolean> {
+    // Ensure matrices are up to date
+    this.camera.updateMatrixWorld(true);
+    this.cubeGroup.updateMatrixWorld(true);
+
     const camForward = new THREE.Vector3(0, 0, -1).transformDirection(this.camera.matrixWorld).normalize();
 
     const faceNormals: Record<FaceKey, THREE.Vector3> = {
@@ -281,6 +285,7 @@ export class CubeScene {
     const result: Record<FaceKey, boolean> = {} as any;
     for (const [face, localNormal] of Object.entries(faceNormals)) {
       const worldNormal = localNormal.clone().transformDirection(this.cubeGroup.matrixWorld).normalize();
+      // Face is visible if its normal points toward camera (dot > 0)
       result[face as FaceKey] = worldNormal.dot(camForward) > 0;
     }
     return result;
