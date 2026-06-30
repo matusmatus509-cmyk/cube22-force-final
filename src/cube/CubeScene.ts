@@ -16,9 +16,9 @@ export class CubeScene {
 
   // Force mode
   private forceState: CubeStateData | null = null;
-  private forceModeArmed = false;    // checkbox - ready to activate
-  private forceModeActive = false;   // actually applying force (after corner trigger)
-  private prevVisibility: Map<FaceKey, boolean> = new Map();
+  private forceModeArmed = false;      // checkbox - ready to activate
+  private forceModeActive = false;     // actually applying force (after button)
+  private initialVisibleFaces: Set<FaceKey> = new Set();
   private forcedFaces: Set<FaceKey> = new Set();
   onForceActiveChange?: (active: boolean) => void;
   onForceArmedChange?: (armed: boolean) => void;
@@ -112,9 +112,9 @@ export class CubeScene {
       // Smoothly interpolate any in-progress drag
       this.cube.tickDragSmoothing();
 
-      // Force mode: visibility tracking (only when ACTIVE, not just armed)
+      // Force mode: check if initially visible faces have become hidden
       if (this.forceModeActive && this.forceState) {
-        this.updateForceVisibility();
+        this.checkAndForceNewlyHidden();
       }
 
       this.renderer.render(this.scene, this.camera);
@@ -140,10 +140,10 @@ export class CubeScene {
     this.cube.setState(solved);
     this.forceModeArmed = false;
     this.forceModeActive = false;
+    this.initialVisibleFaces.clear();
     this.forcedFaces.clear();
     this.onForceActiveChange?.(false);
     this.onForceArmedChange?.(false);
-    this.resetVisibilityTracking();
   }
 
   executeMove(move: MoveType) {
@@ -220,11 +220,20 @@ export class CubeScene {
 
   /** Activate force mode - called from force button */
   activateForceMode() {
-    if (!this.forceModeArmed || this.forceModeActive) return;
+    if (!this.forceModeArmed || this.forceModeActive || !this.forceState) return;
     this.forceModeActive = true;
     this.forcedFaces.clear();
-    this.applyForceToCurrentlyHiddenFaces();
-    this.resetVisibilityTracking();
+
+    // Record which faces are currently visible (the 3 viewer sees)
+    const currentVis = this.computeFaceVisibility();
+    this.initialVisibleFaces.clear();
+    for (const [face, isVisible] of Object.entries(currentVis)) {
+      if (isVisible) this.initialVisibleFaces.add(face as FaceKey);
+    }
+
+    // Immediately force the currently hidden faces
+    this.applyForceToHiddenFaces(currentVis);
+
     this.onForceActiveChange?.(true);
   }
 
@@ -263,13 +272,6 @@ export class CubeScene {
     }
   }
 
-  private resetVisibilityTracking() {
-    const vis = this.computeFaceVisibility();
-    for (const [face, visible] of Object.entries(vis)) {
-      this.prevVisibility.set(face as FaceKey, visible);
-    }
-  }
-
   private computeFaceVisibility(): Record<FaceKey, boolean> {
     // Ensure matrices are up to date
     this.camera.updateMatrixWorld(true);
@@ -289,35 +291,31 @@ export class CubeScene {
     const result: Record<FaceKey, boolean> = {} as any;
     for (const [face, localNormal] of Object.entries(faceNormals)) {
       const worldNormal = localNormal.clone().transformDirection(this.cubeGroup.matrixWorld).normalize();
-      // Face is visible if its normal points toward camera (dot > 0.1 for stability)
-      result[face as FaceKey] = worldNormal.dot(camForward) > 0.1;
+      // Face is VISIBLE if its normal points toward camera (dot > 0)
+      // Face is HIDDEN if dot <= 0 (strictly behind camera plane)
+      result[face as FaceKey] = worldNormal.dot(camForward) > 0;
     }
     return result;
   }
 
-  private updateForceVisibility() {
+  /** Check if any initially visible face has become hidden - then force them and finish */
+  private checkAndForceNewlyHidden() {
+    if (!this.forceState || !this.forceModeActive) return;
     const currentVis = this.computeFaceVisibility();
 
-    const facesToForce: FaceKey[] = [];
-
-    for (const [face, isVisible] of Object.entries(currentVis)) {
-      const wasVisible = this.prevVisibility.get(face as FaceKey) ?? false;
-      const isNowHidden = wasVisible && !isVisible; // transition visible -> hidden
-      const alreadyForced = this.forcedFaces.has(face as FaceKey);
-
-      if (isNowHidden && !alreadyForced) {
-        facesToForce.push(face as FaceKey);
+    const newlyHidden: FaceKey[] = [];
+    for (const face of this.initialVisibleFaces) {
+      if (!currentVis[face] && !this.forcedFaces.has(face)) {
+        newlyHidden.push(face);
       }
     }
 
-    if (facesToForce.length > 0) {
-      this.cube.applyForceToFaces(facesToForce, this.forceState!);
-      facesToForce.forEach(f => this.forcedFaces.add(f));
-    }
-
-    // Update prevVisibility
-    for (const [face, isVisible] of Object.entries(currentVis)) {
-      this.prevVisibility.set(face as FaceKey, isVisible);
+    if (newlyHidden.length > 0) {
+      this.cube.applyForceToFaces(newlyHidden, this.forceState);
+      newlyHidden.forEach(f => this.forcedFaces.add(f));
+      // Force complete - all 6 faces now have force colors
+      this.forceModeActive = false;
+      this.onForceActiveChange?.(false);
     }
   }
 
