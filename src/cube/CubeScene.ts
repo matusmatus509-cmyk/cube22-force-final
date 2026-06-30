@@ -19,6 +19,7 @@ export class CubeScene {
   private forceModeArmed = false;    // checkbox - ready to activate
   private forceModeActive = false;   // actually applying force (after corner trigger)
   private prevVisibility: Map<FaceKey, boolean> = new Map();
+  private forcedFaces: Set<FaceKey> = new Set();
   onForceActiveChange?: (active: boolean) => void;
   onForceArmedChange?: (armed: boolean) => void;
 
@@ -139,6 +140,7 @@ export class CubeScene {
     this.cube.setState(solved);
     this.forceModeArmed = false;
     this.forceModeActive = false;
+    this.forcedFaces.clear();
     this.onForceActiveChange?.(false);
     this.onForceArmedChange?.(false);
     this.resetVisibilityTracking();
@@ -216,10 +218,11 @@ export class CubeScene {
     return this.forceModeArmed;
   }
 
-  /** Activate force mode - called from corner long-press trigger */
+  /** Activate force mode - called from force button */
   activateForceMode() {
     if (!this.forceModeArmed || this.forceModeActive) return;
     this.forceModeActive = true;
+    this.forcedFaces.clear();
     this.applyForceToCurrentlyHiddenFaces();
     this.resetVisibilityTracking();
     this.onForceActiveChange?.(true);
@@ -250,12 +253,13 @@ export class CubeScene {
     const currentVis = this.computeFaceVisibility();
     const facesToForce: FaceKey[] = [];
     for (const [face, isVisible] of Object.entries(currentVis)) {
-      if (!isVisible) {
+      if (!isVisible && !this.forcedFaces.has(face as FaceKey)) {
         facesToForce.push(face as FaceKey);
       }
     }
     if (facesToForce.length > 0) {
       this.cube.applyForceToFaces(facesToForce, this.forceState);
+      facesToForce.forEach(f => this.forcedFaces.add(f));
     }
   }
 
@@ -285,8 +289,8 @@ export class CubeScene {
     const result: Record<FaceKey, boolean> = {} as any;
     for (const [face, localNormal] of Object.entries(faceNormals)) {
       const worldNormal = localNormal.clone().transformDirection(this.cubeGroup.matrixWorld).normalize();
-      // Face is visible if its normal points toward camera (dot > 0)
-      result[face as FaceKey] = worldNormal.dot(camForward) > 0;
+      // Face is visible if its normal points toward camera (dot > 0.1 for stability)
+      result[face as FaceKey] = worldNormal.dot(camForward) > 0.1;
     }
     return result;
   }
@@ -299,14 +303,16 @@ export class CubeScene {
     for (const [face, isVisible] of Object.entries(currentVis)) {
       const wasVisible = this.prevVisibility.get(face as FaceKey) ?? false;
       const isNowHidden = wasVisible && !isVisible; // transition visible -> hidden
+      const alreadyForced = this.forcedFaces.has(face as FaceKey);
 
-      if (isNowHidden) {
+      if (isNowHidden && !alreadyForced) {
         facesToForce.push(face as FaceKey);
       }
     }
 
     if (facesToForce.length > 0) {
       this.cube.applyForceToFaces(facesToForce, this.forceState!);
+      facesToForce.forEach(f => this.forcedFaces.add(f));
     }
 
     // Update prevVisibility

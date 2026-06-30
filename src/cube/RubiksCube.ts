@@ -525,11 +525,11 @@ export class RubiksCube {
         case 'B': // row = 1-y, col = 1-x  → top-to-bottom (y desc), right-to-left (x desc)
           stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || b.worldPos.x - a.worldPos.x);
           break;
-        case 'L': // row = 1-y, col = z+1  → top-to-bottom (y desc), back-to-front (z desc)
-          stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || b.worldPos.z - a.worldPos.z);
-          break;
-        case 'R': // row = 1-y, col = 1-z  → top-to-bottom (y desc), front-to-back (z asc)
+        case 'L': // row = 1-y, col = z+1  → top-to-bottom (y desc), front-to-back (z asc)
           stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || a.worldPos.z - b.worldPos.z);
+          break;
+        case 'R': // row = 1-y, col = 1-z  → top-to-bottom (y desc), back-to-front (z desc)
+          stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || b.worldPos.z - a.worldPos.z);
           break;
       }
 
