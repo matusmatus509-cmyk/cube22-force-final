@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { CubeScene } from './cube/CubeScene';
-import { isSolved, MoveType, CubeStateData, createSolvedState } from './cube/CubeState';
+import { isSolved, MoveType } from './cube/CubeState';
 
 const SCRAMBLE_MOVES: MoveType[] = ['U', "U'", 'D', "D'", 'F', "F'", 'B', "B'", 'L', "L'", 'R', "R'"];
 
@@ -16,46 +16,39 @@ function ForcePanel({
   isOpen, 
   onClose, 
   cubeScene, 
-  currentState 
 }: { 
   isOpen: boolean; 
   onClose: () => void; 
   cubeScene: CubeScene | null; 
-  currentState: CubeStateData;
 }) {
   if (!isOpen) return null;
 
   const [forceEnabled, setForceEnabled] = useState(false);
-  const [forceState, setForceState] = useState<CubeStateData | null>(cubeScene?.getForceState() || null);
+  const [forceSnapshotExists, setForceSnapshotExists] = useState(false);
   const [status, setStatus] = useState<string>('');
 
   // Sync with cubeScene armed state on mount
   useEffect(() => {
     if (cubeScene) {
       setForceEnabled(cubeScene.isForceModeArmed());
+      setForceSnapshotExists(!!cubeScene.getForceSnapshot());
     }
   }, [cubeScene]);
 
-  const handleSetCurrent = () => {
+  const handleSetSnapshot = () => {
     if (!cubeScene) return;
-    cubeScene.setForceState(currentState);
-    setForceState(currentState);
-    setStatus('Force state = Current mixed state');
-  };
-
-  const handleSetSolved = () => {
-    if (!cubeScene) return;
-    const solved = createSolvedState();
-    cubeScene.setForceState(solved);
-    setForceState(solved);
-    setStatus('Force state = Solved');
+    cubeScene.setForceSnapshot();
+    setForceSnapshotExists(true);
+    setStatus('Force Cube SNAPSHOT stored (exact copy of current cube)');
   };
 
   const handleClear = () => {
     if (!cubeScene) return;
-    cubeScene.setForceState(null);
-    setForceState(null);
-    setStatus('Force state cleared');
+    cubeScene.setForceSnapshot(); // This will clear if we pass null, but let's check
+    // Actually we need a clear method - let's just set to null internally
+    (cubeScene as any).forceSnapshot = null;
+    setForceSnapshotExists(false);
+    setStatus('Force Cube cleared');
   };
 
 const handleToggleForce = () => {
@@ -66,9 +59,9 @@ const handleToggleForce = () => {
   };
 
   const handleTestForce = () => {
-    if (!cubeScene || !forceState) return;
+    if (!cubeScene || !forceSnapshotExists) return;
     cubeScene.activateForceMode();
-    setStatus('Test force ACTIVATED - rotate cube to see effect');
+    setStatus('Force ACTIVATED - rotate cube to see hidden faces transform');
   };
 
   return (
@@ -85,23 +78,20 @@ const handleToggleForce = () => {
               type="checkbox" 
               checked={forceEnabled} 
               onChange={handleToggleForce} 
-              disabled={!forceState}
+              disabled={!forceSnapshotExists}
             />
             <span>Force Mode Enabled</span>
-            {!forceState && <span className="force-warning">(Set force state first)</span>}
+            {!forceSnapshotExists && <span className="force-warning">(Snapshot cube first)</span>}
           </label>
 
           <div className="force-buttons">
-            <button onClick={handleSetCurrent} className="force-btn">
-              Set Force = Current State
-            </button>
-            <button onClick={handleSetSolved} className="force-btn">
-              Set Force = Solved
+            <button onClick={handleSetSnapshot} className="force-btn">
+              Snapshot Force Cube (Exact Copy)
             </button>
             <button onClick={handleClear} className="force-btn force-btn-danger">
-              Clear Force State
+              Clear Force Cube
             </button>
-            <button onClick={handleTestForce} className="force-btn force-btn-test" disabled={!forceState || forceEnabled}>
+            <button onClick={handleTestForce} className="force-btn force-btn-test" disabled={!forceSnapshotExists || forceEnabled}>
               Test Force (Rotate Cube)
             </button>
           </div>
@@ -247,8 +237,6 @@ export default function App() {
     }
   };
 
-  const currentState = cubeSceneRef.current?.getState() || createSolvedState();
-
   return (
     <div className="app-root">
       {/* ── Top bar ── */}
@@ -341,7 +329,6 @@ export default function App() {
         isOpen={showForcePanel} 
         onClose={() => setShowForcePanel(false)}
         cubeScene={cubeSceneRef.current}
-        currentState={currentState}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { RubiksCube } from './RubiksCube';
+import { RubiksCube, ForceCubieSnapshot } from './RubiksCube';
 import { CubeInteraction } from './CubeInteraction';
 import { CubeStateData, createSolvedState, MoveType, inverseMove, FaceKey, setFaceColors, getFaceColors } from './CubeState';
 
@@ -15,7 +15,7 @@ export class CubeScene {
   private ro: ResizeObserver | null = null;
 
   // Force mode
-  private forceState: CubeStateData | null = null;
+  private forceSnapshot: ForceCubieSnapshot[] | null = null;
   private forceModeArmed = false;      // checkbox - ready to activate
   private forceModeActive = false;     // actually applying force (after button)
   private initialVisibleFaces: Set<FaceKey> = new Set();
@@ -179,19 +179,13 @@ export class CubeScene {
 
   // ─── Force Mode ──────────────────────────────────────────────
 
-  setForceState(state: CubeStateData) {
-    this.forceState = {
-      U: [...state.U],
-      D: [...state.D],
-      F: [...state.F],
-      B: [...state.B],
-      L: [...state.L],
-      R: [...state.R],
-    };
+  /** Store complete cube snapshot (all 27 cubies with positions, quaternions, sticker colors) */
+  setForceSnapshot() {
+    this.forceSnapshot = this.cube.takeForceSnapshot();
   }
 
-  getForceState(): CubeStateData | null {
-    return this.forceState;
+  getForceSnapshot(): ForceCubieSnapshot[] | null {
+    return this.forceSnapshot;
   }
 
   /** Enable force mode (arm it) - called from checkbox */
@@ -224,7 +218,7 @@ export class CubeScene {
 
   /** Activate force mode - called from force button */
   activateForceMode() {
-    if (!this.forceModeArmed || this.forceModeActive || !this.forceState) return;
+    if (!this.forceModeArmed || this.forceModeActive || !this.forceSnapshot) return;
     this.forceModeActive = true;
     this.forcedFaces.clear();
 
@@ -262,7 +256,7 @@ export class CubeScene {
 
   /** Immediately apply force to faces currently hidden */
   private applyForceToCurrentlyHiddenFaces() {
-    if (!this.forceState) return;
+    if (!this.forceSnapshot) return;
     const currentVis = this.computeFaceVisibility();
     const facesToForce: FaceKey[] = [];
     for (const [face, isVisible] of Object.entries(currentVis)) {
@@ -271,7 +265,7 @@ export class CubeScene {
       }
     }
     if (facesToForce.length > 0) {
-      this.cube.applyForceToFaces(facesToForce, this.forceState);
+      this.cube.applyForceSnapshot(this.forceSnapshot, facesToForce);
       facesToForce.forEach(f => this.forcedFaces.add(f));
     }
   }
@@ -304,7 +298,7 @@ export class CubeScene {
 
   /** Check if any initially visible face has become hidden - then force them and finish */
   private checkAndForceNewlyHidden() {
-    if (!this.forceState || !this.forceModeActive) return;
+    if (!this.forceSnapshot || !this.forceModeActive) return;
     const currentVis = this.computeFaceVisibility();
 
     const newlyHidden: FaceKey[] = [];
@@ -315,7 +309,7 @@ export class CubeScene {
     }
 
     if (newlyHidden.length > 0) {
-      this.cube.applyForceToFaces(newlyHidden, this.forceState);
+      this.cube.applyForceSnapshot(this.forceSnapshot, newlyHidden);
       newlyHidden.forEach(f => this.forcedFaces.add(f));
       // Force complete - all 6 faces now have force colors
       this.forceModeActive = false;
