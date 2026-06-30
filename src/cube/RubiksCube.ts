@@ -529,8 +529,28 @@ export class RubiksCube {
     this.onStateChangeCb?.(this.cubeState);
   }
 
-  /**
-   * Directly update a specific face sticker on a cubie by finding it via userData.face
+/**
+ * Check if a cubie currently has a given face on its exterior.
+ * Based on the cubie's logical position:
+ * - x === 1 → R, x === -1 → L
+ * - y === 1 → U, y === -1 → D
+ * - z === 1 → F, z === -1 → B
+ */
+private cubieHasFace(cubie: Cubie, face: FaceKey): boolean {
+  const { x, y, z } = cubie.logicalPos;
+  switch (face) {
+    case 'R': return x === 1;
+    case 'L': return x === -1;
+    case 'U': return y === 1;
+    case 'D': return y === -1;
+    case 'F': return z === 1;
+    case 'B': return z === -1;
+    default: return false;
+  }
+}
+
+/**
+ * Directly update a specific face sticker on a cubie by finding it via userData.face
    * This is reliable because stickers keep their original face label regardless of cube rotation
    */
   private updateCubieFaceStickerDirect(cubie: Cubie, face: FaceKey, color: string) {

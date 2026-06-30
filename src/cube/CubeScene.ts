@@ -80,9 +80,6 @@ export class CubeScene {
 
     // Start render loop
     this.startRenderLoop();
-
-    // Initialize visibility tracking
-    this.resetVisibilityTracking();
   }
 
   private setupLights() {
