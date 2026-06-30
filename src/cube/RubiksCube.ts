@@ -483,8 +483,8 @@ export class RubiksCube {
   applyForceToFaces(faces: FaceKey[], forceState: CubeStateData) {
     if (!forceState) return;
 
-    // Face normals in world space (cubeGroup local = world since cubeGroup has no parent transforms besides rotation)
-    const faceWorldNormals: Record<FaceKey, THREE.Vector3> = {
+    // Face normals in local cube space
+    const faceLocalNormals: Record<FaceKey, THREE.Vector3> = {
       U: new THREE.Vector3(0, 1, 0),
       D: new THREE.Vector3(0, -1, 0),
       F: new THREE.Vector3(0, 0, 1),
@@ -493,52 +493,50 @@ export class RubiksCube {
       R: new THREE.Vector3(1, 0, 0),
     };
 
+    // Cache inverse matrix for local position computation
+    const invMatrix = new THREE.Matrix4().copy(this.cubeGroup.matrixWorld).invert();
+
     for (const face of faces) {
       const forceColors = getFaceColors(forceState, face);
-      const targetNormal = faceWorldNormals[face];
+      const localTargetNormal = faceLocalNormals[face];
+
+      // Transform face normal to world space for matching
+      const worldTargetNormal = localTargetNormal.clone().transformDirection(this.cubeGroup.matrixWorld).normalize();
 
       // Find all stickers whose world normal matches target face direction
-      const stickers: { mesh: THREE.Mesh; worldPos: THREE.Vector3 }[] = [];
+      // and directly compute face array index from local position
       this.cubeGroup.traverse(obj => {
         if (obj instanceof THREE.Mesh && obj.userData.isSticker && obj.userData.normal) {
           const worldNormal = obj.userData.normal.clone().transformDirection(obj.matrixWorld).normalize();
-          if (worldNormal.dot(targetNormal) > 0.99) {
+          if (worldNormal.dot(worldTargetNormal) > 0.99) {
+            // Sticker matches! Compute its local position to find the array index
             const worldPos = new THREE.Vector3();
             obj.getWorldPosition(worldPos);
-            stickers.push({ mesh: obj, worldPos });
+            const localPos = worldPos.clone().applyMatrix4(invMatrix);
+
+            // Round to cubie grid positions (-1, 0, 1)
+            // The cubie position is the closest integer multiple of TOTAL
+            const x = Math.round(localPos.x / TOTAL);
+            const y = Math.round(localPos.y / TOTAL);
+            const z = Math.round(localPos.z / TOTAL);
+
+            // Compute array index using same logic as getStickerColor
+            let row = 0, col = 0;
+            switch (face) {
+              case 'U': row = 1 - z; col = x + 1; break;
+              case 'D': row = z + 1; col = x + 1; break;
+              case 'F': row = 1 - y; col = x + 1; break;
+              case 'B': row = 1 - y; col = 1 - x; break;
+              case 'L': row = 1 - y; col = z + 1; break;
+              case 'R': row = 1 - y; col = 1 - z; break;
+            }
+            const index = row * 3 + col;
+
+            if (index >= 0 && index < forceColors.length && obj.material instanceof THREE.MeshPhongMaterial) {
+              const color = FACE_COLORS[forceColors[index]] || FACE_COLORS.X;
+              obj.material.color.set(color);
+            }
           }
-        }
-      });
-
-      // Sort stickers to match CubeState face array indexing (0-8, row-major top-left to bottom-right)
-      // See getStickerColor for the index mapping
-      switch (face) {
-        case 'U': // row = 1-z, col = x+1  → back-to-front (z desc), left-to-right (x asc)
-          stickers.sort((a, b) => b.worldPos.z - a.worldPos.z || a.worldPos.x - b.worldPos.x);
-          break;
-        case 'D': // row = z+1, col = x+1  → front-to-back (z asc), left-to-right (x asc)
-          stickers.sort((a, b) => a.worldPos.z - b.worldPos.z || a.worldPos.x - b.worldPos.x);
-          break;
-        case 'F': // row = 1-y, col = x+1  → top-to-bottom (y desc), left-to-right (x asc)
-          stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || a.worldPos.x - b.worldPos.x);
-          break;
-        case 'B': // row = 1-y, col = 1-x  → top-to-bottom (y desc), right-to-left (x desc)
-          stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || b.worldPos.x - a.worldPos.x);
-          break;
-        case 'L': // row = 1-y, col = z+1  → top-to-bottom (y desc), front-to-back (z asc)
-          stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || a.worldPos.z - b.worldPos.z);
-          break;
-        case 'R': // row = 1-y, col = 1-z  → top-to-bottom (y desc), back-to-front (z desc)
-          stickers.sort((a, b) => b.worldPos.y - a.worldPos.y || b.worldPos.z - a.worldPos.z);
-          break;
-      }
-
-      // Apply colors in sorted order
-      stickers.forEach((s, i) => {
-        if (i < forceColors.length && s.mesh.material instanceof THREE.MeshPhongMaterial) {
-          const colorKey = forceColors[i];
-          const color = FACE_COLORS[colorKey] || FACE_COLORS.X;
-          s.mesh.material.color.set(color);
         }
       });
 
