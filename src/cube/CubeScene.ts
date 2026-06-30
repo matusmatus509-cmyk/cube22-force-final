@@ -180,7 +180,14 @@ export class CubeScene {
   // ─── Force Mode ──────────────────────────────────────────────
 
   setForceState(state: CubeStateData) {
-    this.forceState = state;
+    this.forceState = {
+      U: [...state.U],
+      D: [...state.D],
+      F: [...state.F],
+      B: [...state.B],
+      L: [...state.L],
+      R: [...state.R],
+    };
   }
 
   getForceState(): CubeStateData | null {
@@ -229,7 +236,7 @@ export class CubeScene {
     }
 
     // Immediately force the currently hidden faces
-    this.applyForceToHiddenFaces(currentVis);
+    this.applyForceToCurrentlyHiddenFaces();
 
     this.onForceActiveChange?.(true);
   }

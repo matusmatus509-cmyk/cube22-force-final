@@ -499,26 +499,32 @@ export class RubiksCube {
   }
 
   /**
-   * Apply force colors to specific faces.
-   * For each face, find the 9 cubies that currently have that face on their exterior
-   * and set their stickers to the exact colors from forceState.
+   * Apply force colors to specific faces by reading directly from stored force state.
+   * Uses physical orientation to find the correct sticker (not stale userData.face labels).
    */
   applyForceToFaces(faces: FaceKey[], forceState: CubeStateData) {
     if (!forceState) return;
 
     for (const face of faces) {
-      const forceColors = getFaceColors(forceState, face);
+      // Directly read the face colors from stored state (no calculation)
+      const forceColors = forceState[face];
 
       // Find cubies that currently have this face on their exterior
       const targetCubies = this.cubies.filter(cubie => this.cubieHasFace(cubie, face));
 
       for (const cubie of targetCubies) {
+        // Compute which sticker position this cubie occupies on the face
         const index = this.getStickerIndexOnFace(cubie.logicalPos, face);
+
+        // Read the color directly from stored state
         const colorKey = forceColors[index];
         const color = FACE_COLORS[colorKey] || FACE_COLORS.X;
 
-        // Find and update the specific sticker mesh on this cubie for this face
-        this.updateCubieFaceStickerDirect(cubie, face, color);
+        // Find the physical sticker on this cubie that faces the target direction
+        const sticker = this.getStickerOnFace(cubie, face);
+        if (sticker && sticker.material instanceof THREE.MeshPhongMaterial) {
+          sticker.material.color.set(color);
+        }
       }
 
       // Also update cubeState for consistency
@@ -550,24 +556,37 @@ private cubieHasFace(cubie: Cubie, face: FaceKey): boolean {
 }
 
 /**
- * Directly update a specific face sticker on a cubie by finding it via userData.face
-   * This is reliable because stickers keep their original face label regardless of cube rotation
-   */
-  private updateCubieFaceStickerDirect(cubie: Cubie, face: FaceKey, color: string) {
-    let found = false;
-    cubie.mesh.traverse(child => {
-      if (child instanceof THREE.Mesh && child.userData.isSticker && child.userData.face === face) {
-        if (child.material instanceof THREE.MeshPhongMaterial) {
-          child.material.color.set(color);
-        }
-        found = true;
-      }
-    });
-    if (!found) {
-      // Fallback: recreate all stickers for this cubie (shouldn't happen)
-      this.updateCubieStickers(cubie);
+ * Find the sticker on a cubie that currently faces the specified face direction.
+ * Uses the cubie's current physical orientation (quaternion), not the stale userData.face label.
+ */
+private getStickerOnFace(cubie: Cubie, face: FaceKey): THREE.Mesh | null {
+  const faceNormals: Record<FaceKey, THREE.Vector3> = {
+    'U': new THREE.Vector3(0, 1, 0),
+    'D': new THREE.Vector3(0, -1, 0),
+    'F': new THREE.Vector3(0, 0, 1),
+    'B': new THREE.Vector3(0, 0, -1),
+    'L': new THREE.Vector3(-1, 0, 0),
+    'R': new THREE.Vector3(1, 0, 0),
+  };
+  const targetNormal = faceNormals[face];
+
+  for (const child of cubie.mesh.children) {
+    if (!child.userData.isSticker) continue;
+
+    // The sticker's local normal (set at creation, never changes)
+    const localNormal: THREE.Vector3 = child.userData.normal;
+
+    // Transform to cubie's current local space (accounts for moves)
+    const currentNormal = localNormal.clone().applyQuaternion(cubie.mesh.quaternion).normalize();
+
+    // Check if sticker faces the target direction (tolerance 0.9 gives ~26° cone)
+    if (currentNormal.dot(targetNormal) > 0.9) {
+      return child as THREE.Mesh;
     }
   }
+  return null;
+}
+
 
   setState(state: CubeStateData) {
     this.cubeState = { ...state };
