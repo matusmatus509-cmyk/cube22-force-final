@@ -289,9 +289,10 @@ export class CubeScene {
     const result: Record<FaceKey, boolean> = {} as any;
     for (const [face, localNormal] of Object.entries(faceNormals)) {
       const worldNormal = localNormal.clone().transformDirection(this.cubeGroup.matrixWorld).normalize();
-      // Face is VISIBLE if its normal points toward camera (dot > 0)
-      // Face is HIDDEN if dot <= 0 (strictly behind camera plane)
-      result[face as FaceKey] = worldNormal.dot(camForward) > 0;
+      // Face is VISIBLE if its normal points toward camera (opposite to camera forward direction)
+      // Camera forward points FROM camera TO scene; face normal points outward from cube
+      // Visible = normal points toward camera = dot < 0
+      result[face as FaceKey] = worldNormal.dot(camForward) < 0;
     }
     return result;
   }
