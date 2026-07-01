@@ -20,7 +20,7 @@ export class CubeScene {
   private forceModeActive = false;     // actually applying force (after button)
   private initialVisibleFaces: Set<FaceKey> = new Set();
   private forcedFaces: Set<FaceKey> = new Set();
-  private secondTransformDone = false; // guards against infinite loop in phase 2
+  private secondTransformDone = false; // guards against repeated execution in phase 2
   onForceActiveChange?: (active: boolean) => void;
   onForceArmedChange?: (armed: boolean) => void;
 
@@ -267,7 +267,6 @@ export class CubeScene {
       }
     }
     if (facesToForce.length > 0) {
-      console.count('applyForceToCurrentlyHiddenFaces');
       this.cube.applyForceSnapshot(this.forceSnapshot, facesToForce);
       facesToForce.forEach(f => this.forcedFaces.add(f));
     }
@@ -302,7 +301,6 @@ export class CubeScene {
 
   /** Check if any initially visible face has become hidden - then force them and finish (once only) */
   private checkAndForceNewlyHidden() {
-    console.count('checkAndForceNewlyHidden');
     if (!this.forceSnapshot || !this.forceModeActive || this.secondTransformDone) return;
     const currentVis = this.computeFaceVisibility();
 
@@ -314,7 +312,6 @@ export class CubeScene {
     }
 
     if (newlyHidden.length > 0) {
-      console.count('applyForceSnapshot phase2');
       this.cube.applyForceSnapshot(this.forceSnapshot, newlyHidden);
       newlyHidden.forEach(f => this.forcedFaces.add(f));
       this.secondTransformDone = true;
