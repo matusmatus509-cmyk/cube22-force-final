@@ -110,7 +110,7 @@ export class CubeScene {
       this.cube.tickDragSmoothing();
 
       // Force mode: check if initially visible faces have become hidden
-      if (this.forceModeActive && this.forceSnapshot) {
+      if (this.forceModeActive && this.forceState) {
         this.checkAndForceNewlyHidden();
       }
 
