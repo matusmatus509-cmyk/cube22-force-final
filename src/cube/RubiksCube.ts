@@ -536,61 +536,52 @@ export class RubiksCube {
   }
 
   /**
-   * Apply force snapshot to specific faces.
-   * Updates CubeState directly from snapshot (source of truth),
-   * then syncs mesh stickers from updated CubeState.
+   * Apply force snapshot to specific faces by updating only the stickers on those faces.
+   * Preserves other stickers on the same cubie (which may be on visible adjacent faces).
    */
   applyForceSnapshot(snapshots: ForceCubieSnapshot[], faces: FaceKey[]) {
     if (!snapshots || snapshots.length === 0) return;
 
-    // Build O(1) lookup map by logical position
-    const snapMap = new Map<string, ForceCubieSnapshot>();
-    for (const s of snapshots) {
-      snapMap.set(`${s.logicalPos.x},${s.logicalPos.y},${s.logicalPos.z}`, s);
-    }
-
-    // Update CubeState directly from snapshot data
+    // Build a map of which logical positions belong to each face
+    const facePositions = new Map<string, FaceKey[]>();
     for (const face of faces) {
       const positions = this.getFaceCubiePositions(face);
-      const faceColors: FaceColor[] = new Array(9);
-
       for (const pos of positions) {
-        const idx = this.getStickerIndexOnFace(new THREE.Vector3(pos.x, pos.y, pos.z), face);
-        const snap = snapMap.get(`${pos.x},${pos.y},${pos.z}`);
-        if (snap && snap.stickerColors[face]) {
-          faceColors[idx] = this.hexToFaceColor(snap.stickerColors[face]);
-        } else {
-          faceColors[idx] = 'X';
+        const key = `${pos.x},${pos.y},${pos.z}`;
+        if (!facePositions.has(key)) facePositions.set(key, []);
+        facePositions.get(key)!.push(face);
+      }
+    }
+
+    // For each cubie on target faces, update only the stickers for those faces
+    for (const cubie of this.cubies) {
+      const key = `${cubie.logicalPos.x},${cubie.logicalPos.y},${cubie.logicalPos.z}`;
+      const targetFaces = facePositions.get(key);
+      if (!targetFaces) continue;
+
+      // Find matching snapshot by logical position
+      const snap = snapshots.find(s =>
+        s.logicalPos.x === cubie.logicalPos.x &&
+        s.logicalPos.y === cubie.logicalPos.y &&
+        s.logicalPos.z === cubie.logicalPos.z
+      );
+      if (!snap) continue;
+
+      // Update only the stickers for the target faces on this cubie
+      for (const face of targetFaces) {
+        const colorHex = snap.stickerColors[face];
+        if (colorHex) {
+          const sticker = this.getStickerOnFace(cubie, face);
+          if (sticker && sticker.material instanceof THREE.MeshPhongMaterial) {
+            sticker.material.color.set(colorHex);
+          }
         }
       }
-
-      this.cubeState = setFaceColors(this.cubeState, face, faceColors);
     }
 
-    // Sync visual meshes FROM updated CubeState (renderer follows state)
-    for (const face of faces) {
-      const positions = this.getFaceCubiePositions(face);
-      for (const pos of positions) {
-        const cubie = this.cubies.find(c =>
-          c.logicalPos.x === pos.x && c.logicalPos.y === pos.y && c.logicalPos.z === pos.z
-        );
-        if (cubie) this.updateCubieStickers(cubie);
-      }
-    }
-
-    // Notify listeners (once)
+    // Rebuild cubeState from visuals
+    this.rebuildCubeStateFromVisuals();
     this.onStateChangeCb?.(this.cubeState);
-  }
-
-  /**
-   * Convert hex color string to FaceColor key.
-   */
-  private hexToFaceColor(hex: string): FaceColor {
-    const normalized = hex.toLowerCase();
-    for (const [key, value] of Object.entries(FACE_COLORS)) {
-      if (value.toLowerCase() === normalized) return key as FaceColor;
-    }
-    return 'X';
   }
 
   /**
