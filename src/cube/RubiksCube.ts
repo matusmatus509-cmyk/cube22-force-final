@@ -536,35 +536,45 @@ export class RubiksCube {
   }
 
   /**
-   * Apply a complete force snapshot to the current cube.
-   * Physically replaces cubies with their snapshot versions.
-   * Only replaces cubies on the specified faces (hidden faces).
+   * Apply force snapshot to specific faces by updating only the stickers on those faces.
+   * Preserves other stickers on the same cubie (which may be on visible adjacent faces).
    */
   applyForceSnapshot(snapshots: ForceCubieSnapshot[], faces: FaceKey[]) {
     if (!snapshots || snapshots.length === 0) return;
 
     // Build a map of which logical positions belong to each face
-    const facePositions = new Set<string>();
+    const facePositions = new Map<string, FaceKey[]>();
     for (const face of faces) {
       const positions = this.getFaceCubiePositions(face);
       for (const pos of positions) {
-        facePositions.add(`${pos.x},${pos.y},${pos.z}`);
+        const key = `${pos.x},${pos.y},${pos.z}`;
+        if (!facePositions.has(key)) facePositions.set(key, []);
+        facePositions.get(key)!.push(face);
       }
     }
 
-    // Replace cubies that are on the target faces
-    for (let i = 0; i < this.cubies.length; i++) {
-      const cubie = this.cubies[i];
+    // For each cubie on target faces, update only the stickers for those faces
+    for (const cubie of this.cubies) {
       const key = `${cubie.logicalPos.x},${cubie.logicalPos.y},${cubie.logicalPos.z}`;
-      if (facePositions.has(key)) {
-        // Find matching snapshot by logical position
-        const snap = snapshots.find(s =>
-          s.logicalPos.x === cubie.logicalPos.x &&
-          s.logicalPos.y === cubie.logicalPos.y &&
-          s.logicalPos.z === cubie.logicalPos.z
-        );
-        if (snap) {
-          this.replaceCubieWithSnapshot(i, snap);
+      const targetFaces = facePositions.get(key);
+      if (!targetFaces) continue;
+
+      // Find matching snapshot by logical position
+      const snap = snapshots.find(s =>
+        s.logicalPos.x === cubie.logicalPos.x &&
+        s.logicalPos.y === cubie.logicalPos.y &&
+        s.logicalPos.z === cubie.logicalPos.z
+      );
+      if (!snap) continue;
+
+      // Update only the stickers for the target faces on this cubie
+      for (const face of targetFaces) {
+        const colorHex = snap.stickerColors[face];
+        if (colorHex) {
+          const sticker = this.getStickerOnFace(cubie, face);
+          if (sticker && sticker.material instanceof THREE.MeshPhongMaterial) {
+            sticker.material.color.set(colorHex);
+          }
         }
       }
     }
